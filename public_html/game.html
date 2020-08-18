@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- <script src="./game.js"></script> -->
+    <title>Document</title>
+    <style>
+        /* body::before {
+            content: "";
+            position: fixed;
+            width: 100%;
+            box-shadow: 0px 0 10px rgba(0, 0, 0, 0.8);
+            z-index: 100;
+            } */
+        #Header {
+            text-align: center;
+            width: 100%;
+            height: auto;
+            position: relative;
+            overflow: hidden;
+            border-radius: 0 0 85% 85% / 30%;
+            color: rgb(0, 0, 0);
+            text-shadow: 1px 1px 1px #333;
+            background-image: linear-gradient(135deg, #979797 10%, #6b02026b 100%);
+        }
+
+        div {
+            border: 1px solid;
+            padding-top: 10px;
+        }
+
+        #overlay {
+            background: grey;
+            opacity: 1;
+            height: 100%;
+            position: relative;
+            transition: opacity .5s;
+            align-items: center;
+        }
+
+        #Game {
+            position: relative;
+            height: 100%;
+            display: flex;
+            position: relative;
+            border-top: 0px;
+        }
+
+        td {
+            display: block;
+            /* or inline-block */
+        }
+        #Players{
+            display: flex;
+            padding-left: 4px;
+            border: 0px;
+        }
+        #Players > div{
+            /* color: blueviolet;
+            background: blanchedalmond; */
+            font-weight: bold;
+            text-align: center;
+            font-family: monospace;
+            outline: 2px outset;
+            outline-offset: 2px;
+            display: inline-block;
+            margin: auto;
+        }
+
+        #board {
+            width: max-content;
+            min-width: 70vw;
+            height: max-content;
+            border: 1px #666;
+            box-shadow: 3px 3px 3px #aaa;
+            display: grid;
+            overflow: auto;
+            padding: 1rem;
+            table-layout: fixed;
+            border-spacing: 0;
+        }
+
+        #board .cell {
+            width: 25px;
+            height: 25px;
+            border: 1px inset #666;
+            text-align: center;
+            cursor: pointer;
+            line-height: 40px;
+            background-color: rgb(255, 255, 255);
+            color: #000;
+            font-weight: bold;
+            float: left;
+        }
+
+        #board .cell.hidden {
+            background-image: none !important;
+            background-color: #ddd !important;
+            color: #eee !important;
+        }
+
+        #board .cell.hidden.flag {
+            background: rgb(225, 255, 230) url("images/flag.png") center no-repeat !important;
+            background-size: 25px 25px;
+        }
+
+        #board .cell.hidden.flag span {
+            display: none;
+        }
+
+        #board .cell.hidden span {
+            display: none !important;
+        }
+
+        #board .cell.mine {
+            background: rgb(253, 203, 161) url("images/mine.png") center no-repeat;
+            background-size: 25px 25px;
+        }
+
+        #board .cell.mine span {
+            display: none;
+        }
+
+        #Leaderboard .Leaderboard{
+            width: 30vw;
+            font-family: monospace;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/1.7.3/socket.io.min.js"></script>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+</head>
+
+<body>
+    <div id="Home">
+        <div id="Header">
+            <h1>MineSweeper</h1>
+            <p>Online</p>
+        </div>
+        <div id="Players">
+        </div>
+        <div id="Game">
+            <div style="overflow:auto; margin: 0 auto;">
+                <table id="board">
+
+                    <div id="overlay">
+                        <label for="Name">UserName</label>
+                        <input type="text" id="Name" name="User"></input>
+                        <button id="Start" value="Start" onClick="serverConnect(this)"></button>
+                        <!--  -->
+                    </div>
+                </table>
+            </div>
+            <div class="Leaderboard">
+                <table id="Leaderboard">
+                    <tr>
+                        <th>#</th>
+                        <th>Name</th>
+                        <th>Score</th>
+                    </tr>
+                    <tr>
+                        <td>1</td>
+                        <td>Alpha</td>
+                        <td>25</td>
+                    </tr>
+                    <tr>
+                        <td>1</td>
+                        <td>Alpha</td>
+                        <td>25</td>
+                    </tr>
+                </table>
+
+            </div>
+
+        </div>
+        <div id="Footer">
+            <p>Developed for CS375 - Winter 2020</p>
+
+        </div>
+
+    </div>
+    <script src="https://cdn.socket.io/socket.io-1.4.5.js"></script>
+    <script>
+        var name;
+        var socket = io.connect('http://' + document.location.hostname + ':25565');
+        var colors = [];
+        var G = [];
+        //Colors
+        for (let index = 0; index < 10; index++) {
+            colors.push(Math.floor(Math.random()*16777215).toString(16)) ;   
+        }
+        //cache manager
+        if (document.cookie.length > 0) {
+            document.getElementById("overlay").hidden = true;
+            name = parseInt(document.cookie.split('=')[1]);
+            getLeaderboard()
+            socket.emit('requestBoard', name);
+        }
+        //Right click hanhdler
+        $(document).ready(function () {
+            document.oncontextmenu = function () {
+                return false;
+            };
+
+            $(document).mousedown(function (e) {
+                console.log("Button: ", e.button);
+                if (e.button == 2) {
+                    eventHandler(e);
+                    return false;
+                }else if (e.button == 0){
+                    eventHandler(e);
+                    return true;
+                }
+                return true;
+            });
+        });
+        //Cache to server
+        function serverConnect(elem) {
+            name = document.getElementById("Name").value;
+            if (name == "") {
+                alert("Please enter a userName")
+            } else {
+                document.getElementById("overlay").hidden = true;
+                connect("name=" + name);
+                getLeaderboard()
+                // socket.emit(connection, socket);
+            }
+        }
+        //Game generator
+        function gameStart(x, y, G) {
+
+            game = document.getElementById("board");
+            game.innerHTML = "";
+
+            for (var i = 0; i < x; i++) {
+                row = game.insertRow(i);
+                for (var u = 0; u < y; u++) {
+                    
+                    id = "" + (i) + "-" + (u);
+                    cell = row.insertCell(u)
+                    cell.setAttribute("class", "cell hidden");
+                    if(G[i].length > 1 && G[i][u] != null){
+                        if (G[i][u][1] == 10){
+                            //console.log("flag ", G[i][u]);
+                            cell.classList.add("flag");
+                        }else if (G[i][u][1] > -1){
+                            //console.log("uncovered ", G[i][u]);
+                            cell.classList.remove("hidden");
+                            cell.innerHTML = G[i][u][1];
+                        }else if (G[i][u][1] == -1){
+                            //console.log("mine ", G[i][u]);
+                            cell.classList.remove("hidden");
+                            cell.classList.add("mine");
+                        }
+                    }
+                    cell.setAttribute("id", id);
+                    cell.setAttribute("oncontextmenu", "jvascript:eventHandler('right');false");
+                    //cell.onclick = eventHandler;
+
+                }
+            }
+        }
+        //Click handler
+        eventHandler = function (e) {
+            console.log(e);
+            if (e.target.classList[0] == "cell"){
+                if (e.button ==  2) {
+                    console.log("rigth ");
+                    var temp = e.target.id.split("-");
+                    //console.log(parseInt(temp[0]), parseInt(temp[1]));
+                    ////console.log(G.data[parseInt(temp[0])][parseInt(temp[1])]);
+                    //console.log('name',name);
+                    socket.emit("processFlag", {
+                        x: parseInt(temp[0]),
+                        y: parseInt(temp[1]),
+                        player: name
+                    });
+
+                } else if (e.button == 0) /* left click */ {
+                    console.log("left ");
+                    var temp = e.target.id.split("-");
+                    console.log(temp);
+                    //console.log(parseInt(temp[0]), parseInt(temp[1]));
+                    ////console.log(G.data[parseInt(temp[0])][parseInt(temp[1])]);
+                    //console.log('name', name);
+                    socket.emit("processMove", {
+                        x: parseInt(temp[0]),
+                        y: parseInt(temp[1]),
+                        player: name
+                    });
+                } else {
+                    //console.log("work");
+                }
+        }
+        }
+        //Server Connection
+        function connect(params) {
+            jQuery.ajax({
+                url: "/connect?" + params,
+                cache: true,
+                dataType: "html",
+                success: function (result) {
+                    //console.log(result)
+                    //socket.emit("player", name);
+                    name = document.cookie.split('=')[1];
+                    socket.emit('requestBoard', name);
+                    //gameStart(30, 30);
+                }
+            });
+
+        }
+        //Socket Connect
+        socket.on('connect', function () {
+
+        })
+        //NewBoard
+        socket.on("updateBoard", function (data) {
+            console.log(data.length);
+            
+            //console.log(move.playerID);
+            console.log(data);
+            if (data.length == 1){
+                var move = data[0];
+                alterBoard(move)
+            }else{
+                for (let index = 0; index < data.length; index++) {
+                    var move = data[index];
+                    alterBoard(move);
+                }
+            }
+            getScore();
+        });
+        //Helper to above
+        function alterBoard(move){
+            if(move.x < 29 || move.y < 29){
+                G[move.x][move.y] = move.val;
+
+                if ( move.val == 10) {
+                    //console.log("in");
+                    id = "" + move.x + "-" + move.y;
+                    cell = document.getElementById(id);
+                    cell.classList.add("flag");
+                    //console.log(cell);
+
+                } else if (  move.val > -1) {
+                    //console.log("in");
+                    id = "" + move.x + "-" + move.y;
+                    cell = document.getElementById(id);
+                    cell.classList.remove("hidden");
+                    cell.innerHTML = move.val
+                    cell.value = move.val;
+                    //console.log(cell);
+
+                } else if ( move.val == undefined){
+                    
+                    id = "" + move.x + "-" + move.y;
+                    cell = document.getElementById(id);
+                    cell.classList.remove("flag");
+
+                }else if(name == move.playerID) {
+                    id = "" + move.x + "-" + move.y;
+                    cell = document.getElementById(id);
+                    cell.classList.remove("hidden");
+                    cell.classList.add("mine");
+                    alert("lost");
+                }else{
+                    //alert("Losing isn't registered cause ID changes in the ProcessMove, I assume it should be score");
+                }
+            }else{
+                console.log("Out of range");
+            }
+        }
+        //First Board
+        socket.on("getBoard", function (data) {
+            G = data;
+            //console.log(data);
+            gameStart(30, 30, G);
+            getScore();
+        });
+        //End the game
+        socket.on("gameEnd", function (data){
+            //console.log('in');
+            socket.emit('requestBoard', name);
+            getLeaderboard();
+        })
+        //Leaderboard
+        function getLeaderboard() {
+            jQuery.ajax({
+                url: "/scoreboard",
+                cache: true,
+                dataType: "html",
+                success: function (result) {
+                    game = document.getElementById("Leaderboard");
+                    game.innerHTML = "<tr>\
+                        <th>#</th>\
+                        <th>Name</th>\
+                        <th>Score</th>\
+                    </tr>";
+                    res = JSON.parse(result);
+                    for (var i = 0; i < res.length; i++) {
+                        game.innerHTML += "<tr id="+res[i].id+">";
+                        document.getElementById(res[i].id).innerHTML =
+                        "<th>"+(i+1)+"</th>\
+                        <th>"+res[i].name+"</th>\
+                        <th>"+res[i].score+"</th>";
+                        if(i>15){
+                            break;
+                        }
+                    }
+                }
+            });
+
+        }
+        //Current scores
+        function getScore() {
+            jQuery.ajax({
+                url: "/currScore?",
+                cache: true,
+                dataType: "html",
+                success: function (result) {
+                    console.log("IN here");
+                    game = document.getElementById("Players");
+                    game.innerHTML = "<p>Players Online</p>";
+                    res = JSON.parse(result);
+                    console.log(res);
+                    for (var i = 0; i < res.length; i++) {
+                        game.innerHTML += "<div style=\"outline-color: #"+colors[i]+"\">"+res[i].name + ": "+res[i].score+"</div>";
+                    }
+                }
+            });
+
+        }
+    </script>
+
+    <script>
+        // <div class="cell hidden flag"></div>
+        //         <div class="cell hidden mine"></div>
+
+        //gameStart(10, 10)
+        var turn = true;
+
+
+
+        function rightClick(coord) {
+            //console.log("rigth ", coord);
+        }
+
+        function leftClick(coord) {
+            //console.log("left ", coord);
+        }
+
+        function on() {
+            document.getElementById("overlay").style.display = "block";
+        }
+
+        function off() {
+            document.getElementById("overlay").style.display = "none";
+        }
+    </script>
+</body>
+
+</html>
