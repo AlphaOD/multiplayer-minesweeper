@@ -1,5 +1,5 @@
 /**
- * Mason Miller
+ * Mason Miller - Alpha DIallo
  * CS375
  * Minesweeper server
  */
